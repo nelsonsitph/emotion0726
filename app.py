@@ -10,7 +10,6 @@ st.set_page_config(page_title="Face & Smile Detector", page_icon="😊", layout=
 st.title("😊 Face & Smile Expression Detector")
 st.write("A lightweight expression analyzer.")
 
-# Function to safely load cascade classifiers from official OpenCV GitHub source
 @st.cache_resource
 def load_cascades():
     face_url = "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
@@ -30,7 +29,6 @@ def load_cascades():
 
 face_cascade, smile_cascade = load_cascades()
 
-# Input choice
 choice = st.radio("Choose Input Method:", ("Webcam Snapshot", "Upload Image"), horizontal=True)
 image_input = None
 
