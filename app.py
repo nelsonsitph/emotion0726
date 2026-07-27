@@ -1,16 +1,18 @@
-import streamlit as st
 import cv2
 import numpy as np
+import streamlit as st
 from PIL import Image
-from deepface import DeepFace
 
-# Page Config
-st.set_page_config(page_title="Emotion Detector", page_icon="🎭", layout="centered")
+st.set_page_config(page_title="Lightweight Face & Smile Detector", page_icon="😊", layout="centered")
 
-st.title("🎭 Real-Time Emotion Detection")
-st.write("Take a snapshot with your camera or upload a photo to analyze facial expressions.")
+st.title("😊 Face & Smile Expression Detector")
+st.write("A lightweight, fast expression analyzer running on OpenCV.")
 
-# Choose Input
+# Load built-in OpenCV Haar Cascade classifiers
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_smile.xml')
+
+# Choice input
 choice = st.radio("Choose Input Method:", ("Webcam Snapshot", "Upload Image"), horizontal=True)
 image_input = None
 
@@ -23,44 +25,39 @@ else:
     if up_file:
         image_input = Image.open(up_file)
 
-# Detection logic
 if image_input:
+    # Convert image format
     img_array = np.array(image_input.convert("RGB"))
+    gray_img = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     
-    with st.spinner("Analyzing facial expressions..."):
-        try:
-            # Analyze emotions using DeepFace
-            results = DeepFace.analyze(img_array, actions=['emotion'], enforce_detection=False)
+    # Detect faces
+    faces = face_cascade.detectMultiScale(gray_img, scaleFactor=1.3, minNeighbors=5)
+
+    if len(faces) == 0:
+        st.warning("No face detected. Please ensure clear lighting and direct camera angle.")
+        st.image(image_input, caption="Uploaded Image", use_container_width=True)
+    else:
+        annotated_img = img_array.copy()
+        st.subheader("Analysis Results")
+
+        for idx, (x, y, w, h) in enumerate(faces, start=1):
+            # Extract face region for smile analysis
+            roi_gray = gray_img[y:y+h, x:x+w]
+            smiles = smile_cascade.detectMultiScale(roi_gray, scaleFactor=1.8, minNeighbors=20)
             
-            if not isinstance(results, list):
-                results = [results]
+            # Determine expression
+            if len(smiles) > 0:
+                detected_emotion = "HAPPY / SMILING 😊"
+                color = (0, 255, 0) # Green box
+            else:
+                detected_emotion = "NEUTRAL / SERIOUS 😐"
+                color = (255, 165, 0) # Orange box
 
-            annotated_img = img_array.copy()
-            st.subheader("Analysis Results")
+            # Draw box around face
+            cv2.rectangle(annotated_img, (x, y), (x + w, y + h), color, 3)
+            cv2.putText(annotated_img, detected_emotion, (x, max(y - 10, 20)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
-            for idx, face in enumerate(results, start=1):
-                region = face["region"]
-                emotions = face["emotion"]
-                top_emotion = face["dominant_emotion"]
-                score = emotions[top_emotion]
+            st.markdown(f"**Face #{idx}: Detected Expression — `{detected_emotion}`**")
 
-                # Draw rectangle
-                x, y, w, h = region["x"], region["y"], region["w"], region["h"]
-                cv2.rectangle(annotated_img, (x, y), (x + w, y + h), (0, 255, 128), 3)
-                cv2.putText(annotated_img, f"{top_emotion.capitalize()} ({score:.0f}%)", 
-                            (x, max(y - 10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 128), 2)
-
-                st.markdown(f"**Face #{idx}: Primary Emotion — `{top_emotion.upper()}` ({score:.1f}%)**")
-                
-                # Show confidence breakdown
-                cols = st.columns(2)
-                for i, (emo, val) in enumerate(emotions.items()):
-                    target_col = cols[i % 2]
-                    target_col.text(f"{emo.capitalize()}: {val:.1f}%")
-                    target_col.progress(float(val) / 100.0)
-                st.divider()
-
-            st.image(annotated_img, caption="Processed Image", use_container_width=True)
-
-        except Exception as e:
-            st.error("Could not process image. Please try another photo with clear lighting.")
+        st.image(annotated_img, caption="Processed Image", use_container_width=True)
